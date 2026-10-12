@@ -10,10 +10,23 @@
  * 6. Error handling, clipboard interaction, and sample code loaders.
  */
 
-// API Configuration
-const API_BASE_URL = (window.location.protocol.startsWith('http') && window.location.port !== '8000')
-  ? ''
-  : (window.location.port === '5000' ? 'http://127.0.0.1:5000' : 'http://127.0.0.1:5001');
+// Production Render Backend URL
+const RENDER_BACKEND_URL = 'https://dependency-aware-compiler-optimization.onrender.com';
+
+function getApiBaseUrl() {
+  // If running directly on Render or local Flask server, use relative path
+  if (
+    window.location.hostname.includes('onrender.com') ||
+    window.location.port === '5000' ||
+    window.location.port === '5001'
+  ) {
+    return '';
+  }
+  // If running on Vercel or any other domain, point to live Render backend
+  return RENDER_BACKEND_URL;
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Default Sample Program
 const DEFAULT_SAMPLE_PROGRAM = `x = 2 + 3 * 4;
@@ -127,7 +140,8 @@ async function checkBackendHealth() {
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    // Render free instances may take up to 30s to wake up on cold start
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch(`${API_BASE_URL}/api/health`, {
       method: 'GET',
