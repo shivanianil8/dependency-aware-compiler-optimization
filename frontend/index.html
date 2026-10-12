@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dependency-Aware Compiler Optimization</title>
+  <!-- Cytoscape.js Official CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+  <!-- Local Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
+  <!-- Application Header -->
+  <header class="app-header">
+    <div class="header-content">
+      <div class="brand">
+        <h1 class="project-title">Dependency-Aware Compiler Optimization</h1>
+        <p class="project-subtitle">
+          Interactive Optimization Dependence Graph (ODG) &amp; Deterministic Pass Scheduling
+        </p>
+      </div>
+      <div class="header-status">
+        <div id="backend-status" class="status-indicator status-checking" aria-live="polite">
+          <span class="status-dot"></span>
+          <span id="status-text">Checking Backend...</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Error Notification Area -->
+  <div id="error-banner" class="error-banner hidden" role="alert" aria-live="assertive">
+    <div class="error-content">
+      <span class="error-icon">⚠️</span>
+      <div class="error-text">
+        <strong id="error-title" class="error-title">Error Encountered</strong>
+        <p id="error-message" class="error-message"></p>
+      </div>
+    </div>
+    <button id="btn-dismiss-error" class="btn-dismiss" aria-label="Dismiss error notification">&times;</button>
+  </div>
+
+  <!-- Main Dashboard -->
+  <main class="dashboard-grid">
+    <!-- Left Column: Source Code Editor & Controls -->
+    <section class="panel editor-panel" aria-labelledby="heading-editor">
+      <div class="panel-header">
+        <h2 id="heading-editor" class="panel-title">Source Code (Supported Language Subset)</h2>
+        <span class="badge badge-info">Integers &amp; Statements</span>
+      </div>
+
+      <div class="editor-wrapper">
+        <label for="source-code" class="sr-only">Source Code Editor</label>
+        <textarea
+          id="source-code"
+          class="code-textarea"
+          spellcheck="false"
+          placeholder="Enter statements here (e.g. x = 10; y = x * 1; print(y);)..."
+        >x = 2 + 3 * 4;
+y = x * 1;
+z = y + 0;
+dead_val = 999;
+print(z);</textarea>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="toolbar">
+        <div class="primary-actions">
+          <button id="btn-analyze" class="btn btn-secondary">
+            <span class="btn-icon">🔍</span> Analyze Code
+          </button>
+          <button id="btn-optimize" class="btn btn-primary">
+            <span class="btn-icon">⚡</span> Analyze &amp; Optimize
+          </button>
+        </div>
+        <div class="secondary-actions">
+          <button id="btn-example" class="btn btn-outline">
+            <span class="btn-icon">📋</span> Load Example
+          </button>
+          <button id="btn-clear" class="btn btn-outline">
+            <span class="btn-icon">🗑️</span> Clear Code
+          </button>
+        </div>
+      </div>
+
+      <!-- Optimization Passes Status -->
+      <div class="passes-section" aria-labelledby="heading-passes">
+        <h3 id="heading-passes" class="section-title">Supported Passes &amp; Applicability</h3>
+        <div id="passes-container" class="passes-container">
+          <div id="pass-card-cf" class="pass-card" data-pass-id="constant_folding">
+            <div class="pass-header">
+              <span class="pass-name">Constant Folding</span>
+              <span id="pass-status-cf" class="pass-badge badge-idle">Pending</span>
+            </div>
+            <p class="pass-desc">Evaluates constant arithmetic expressions at compile time.</p>
+          </div>
+
+          <div id="pass-card-as" class="pass-card" data-pass-id="algebraic_simplification">
+            <div class="pass-header">
+              <span class="pass-name">Algebraic Simplification</span>
+              <span id="pass-status-as" class="pass-badge badge-idle">Pending</span>
+            </div>
+            <p class="pass-desc">Simplifies arithmetic identities (x+0, x-0, x*1, x*0, x/1).</p>
+          </div>
+
+          <div id="pass-card-dce" class="pass-card" data-pass-id="dead_code_elimination">
+            <div class="pass-header">
+              <span class="pass-name">Dead Code Elimination</span>
+              <span id="pass-status-dce" class="pass-badge badge-idle">Pending</span>
+            </div>
+            <p class="pass-desc">Eliminates unused variable assignments while preserving print statements.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pass Execution Order -->
+      <div class="order-section" aria-labelledby="heading-order">
+        <h3 id="heading-order" class="section-title">Topological Pass Execution Order</h3>
+        <div id="pass-order-container" class="order-container">
+          <p id="pass-order-placeholder" class="empty-state">
+            Run analysis to compute the deterministic topological pass order.
+          </p>
+          <ol id="pass-order-list" class="pass-order-list hidden"></ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- Center/Right Column: Dependency Graph & Analysis -->
+    <section class="panel graph-panel" aria-labelledby="heading-graph">
+      <div class="panel-header">
+        <div class="title-with-badge">
+          <h2 id="heading-graph" class="panel-title">Optimization Dependence Graph (ODG)</h2>
+          <span id="graph-stats-badge" class="badge badge-secondary">0 Nodes, 0 Edges</span>
+        </div>
+        <div class="graph-actions">
+          <button id="btn-fit-graph" class="btn btn-sm btn-outline" title="Center and fit graph">
+            Center View
+          </button>
+        </div>
+      </div>
+
+      <!-- Cytoscape Graph Container -->
+      <div class="graph-wrapper">
+        <div id="dependency-graph" class="graph-canvas" role="region" aria-label="Optimization Dependence Graph Viewport"></div>
+        <div id="graph-placeholder" class="graph-empty-overlay">
+          <div class="empty-icon">🕸️</div>
+          <p class="empty-title">Graph Not Loaded</p>
+          <p class="empty-desc">
+            Click <strong>Analyze Code</strong> or <strong>Analyze &amp; Optimize</strong> to construct the Optimization Dependence Graph from backend dependency rules.
+          </p>
+        </div>
+      </div>
+
+      <div class="graph-legend">
+        <div class="legend-item"><span class="legend-node"></span> Node: Optimization Pass</div>
+        <div class="legend-item"><span class="legend-edge"></span> Edge: Scheduling Dependency (Source runs before Target)</div>
+      </div>
+    </section>
+
+    <!-- Bottom/Right Column: Optimized Code & Transformation Log -->
+    <section class="panel results-panel" aria-labelledby="heading-results">
+      <div class="panel-header">
+        <h2 id="heading-results" class="panel-title">Optimized Code Output</h2>
+        <button id="btn-copy-code" class="btn btn-sm btn-outline" title="Copy optimized code to clipboard">
+          <span class="btn-icon">📋</span> Copy Code
+        </button>
+      </div>
+
+      <div class="output-wrapper">
+        <pre id="optimized-code-container" class="code-pre"><code id="optimized-code" class="code-output">// Optimized code will appear here after running pipeline...</code></pre>
+      </div>
+
+      <!-- Pipeline Statistics -->
+      <div class="stats-section" aria-labelledby="heading-stats">
+        <h3 id="heading-stats" class="section-title">Execution Statistics</h3>
+        <div id="stats-panel" class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-label">Original Statements</span>
+            <span id="stat-orig-statements" class="stat-value">--</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Optimized Statements</span>
+            <span id="stat-opt-statements" class="stat-value">--</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Transformations Applied</span>
+            <span id="stat-transformations" class="stat-value">--</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Statement Reduction</span>
+            <span id="stat-reduction" class="stat-value">--</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transformation Log -->
+      <div class="log-section" aria-labelledby="heading-log">
+        <div class="section-header-row">
+          <h3 id="heading-log" class="section-title">Step-by-Step Transformation Log</h3>
+          <span id="log-count-badge" class="badge badge-secondary">0 Records</span>
+        </div>
+        <div id="transformation-log-container" class="log-container">
+          <p id="log-placeholder" class="empty-state">
+            No transformations recorded yet. Run optimization to inspect the pass log.
+          </p>
+          <ul id="transformation-list" class="transformation-list hidden"></ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Local Script -->
+  <script src="script.js"></script>
+</body>
+</html>
